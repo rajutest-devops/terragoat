@@ -64,7 +64,6 @@ jobs:
         run: |
           terraform init -backend=false
           terraform validate
-        continue-on-error: true  # Legacy Terragoat syntax can fail on modern Terraform; keep scans running for demo
         # -backend=false skips state backend init (we don't have credentials here)
         # This still validates resource types, argument names, and value types
 
@@ -90,7 +89,7 @@ jobs:
           directory: terraform/aws
           output_format: cli,sarif
           output_file_path: console,checkov-aws.sarif
-          soft_fail: true  # Don't block pipeline - upload findings as annotations
+          soft_fail: false  # Block pipeline on policy violations
       
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
@@ -99,7 +98,7 @@ jobs:
         with:
           sarif_file: checkov-aws.sarif
           category: checkov-aws
-        if: always()
+        if: always() && hashFiles('checkov-aws.sarif') != ''
 
   tfsec-scan:
     name: TFSec IaC Scan
@@ -118,14 +117,14 @@ jobs:
           working_directory: terraform/aws
           format: sarif
           sarif_file: tfsec.sarif
-          soft_fail: true  # Don't fail build - surface as annotations
+          soft_fail: false  # Block pipeline on policy violations
       
       - name: Upload TFSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
         with:
           sarif_file: tfsec.sarif
           category: tfsec
-        if: always()
+        if: always() && hashFiles('tfsec.sarif') != ''
 
   # ─────────────────────────────────────────────
   # STAGE 3: SECRET SCANNING
