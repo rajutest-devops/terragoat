@@ -1,4 +1,4 @@
-resource aws_ecr_repository "repository" {
+resource "aws_ecr_repository" "repository" {
   name                 = "${local.resource_prefix.value}-repository"
   image_tag_mutability = "MUTABLE"
 
@@ -22,7 +22,7 @@ locals {
 }
 
 
-resource null_resource "push_image" {
+resource "null_resource" "push_image" {
   provisioner "local-exec" {
     working_dir = "${path.module}/resources"
     command     = <<BASH

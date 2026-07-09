@@ -27,7 +27,7 @@ resource "aws_elasticsearch_domain" "monitoring-framework" {
   }
 }
 
-data aws_iam_policy_document "policy" {
+data "aws_iam_policy_document" "policy" {
   statement {
     actions = ["es:*"]
     principals {
