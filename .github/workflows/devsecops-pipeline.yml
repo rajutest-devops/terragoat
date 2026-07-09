@@ -45,8 +45,8 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       
       - name: Setup Terraform
-        # Pinned to correct SHA corresponding to latest v3 release
-        uses: hashicorp/setup-terraform@f1fd52da0e290f67c3f30997f6424e4d6d375373 
+        # Updated to v3 to resolve historical SHA download failures
+        uses: hashicorp/setup-terraform@v3
       
       - name: Terraform Format Check (${{ matrix.cloud }})
         working-directory: terraform/${{ matrix.cloud }}
@@ -212,8 +212,10 @@ jobs:
             | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Check Security tab for findings |
             | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Check Security tab for findings |
             | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Failed = secrets found in history |
+            
             > Scan findings are uploaded to the **Security** tab → **Code Scanning** of this repository.
             > All SARIF results are available there with file/line references.`;
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
