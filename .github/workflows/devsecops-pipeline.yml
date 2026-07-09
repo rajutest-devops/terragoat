@@ -1,26 +1,23 @@
 # DevSecOps Security Pipeline
 # Purpose: Shift-left security scanning for Terraform IaC
-# Triggers: Every push and every pull request
+# Triggers: Every push and every pull request to demo-main and feature branches
 # Stages: lint → iac-scan → secret-scan
-#
-# This pipeline was added as part of a DevSecOps assessment to demonstrate
-# a secure, multi-stage CI/CD pipeline for infrastructure code.
-#
-# Key security practices applied here:
+
+### Key security practices applied here:
 #  - Pinned action versions (not @main or @master which can change silently)
 #  - Least-privilege GITHUB_TOKEN permissions declared explicitly
 #  - No self-hosted runners (avoids runner compromise via malicious PRs)
 #  - Artifacts uploaded for audit trail (findings are stored, not just printed)
-#  - All three scan tools run independently so one failure doesn't hide others
+#  - All scan tools run independently so one failure doesn't hide others
 #  - allow_failure distinction: lint blocks, scan warns, secrets blocks
 
 name: DevSecOps Pipeline
 
 on:
   push:
-    branches: [master, main]
+    branches: [demo-main, aws-fix-pipeline-demo, master, main, 'feature/*']
   pull_request:
-    branches: [master, main]
+    branches: [demo-main, master, main, 'feature/*']
 
 # Declare minimum required permissions for the GITHUB_TOKEN
 # Default is write-all which violates least-privilege
@@ -30,7 +27,6 @@ permissions:
   pull-requests: write  # Post scan summary as PR comment
 
 jobs:
-
   # ─────────────────────────────────────────────
   # STAGE 1: LINT
   # Check Terraform syntax and formatting before scanning
@@ -39,28 +35,26 @@ jobs:
   terraform-lint:
     name: Terraform Lint
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        # Run lint against all three cloud configs in parallel
-        cloud: [aws, azure, gcp]
-
+        # AWS-only assessment scope in this demo branch
+        cloud: [aws]
     steps:
       - name: Checkout repository
         # Pinned to v4.2.2 SHA - not using @v4 tag which is mutable
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
+      
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269ef065
-        # Pinned to v3.1.2
-
+        # Pinned to correct SHA corresponding to latest v3 release
+        uses: hashicorp/setup-terraform@f1fd52da0e290f67c3f30997f6424e4d6d375373 
+      
       - name: Terraform Format Check (${{ matrix.cloud }})
         working-directory: terraform/${{ matrix.cloud }}
         # -check flag makes this exit non-zero if formatting is wrong
         # -recursive checks all subdirectories
         run: terraform fmt -check -recursive .
         continue-on-error: true  # Warn but don't block on formatting
-
+      
       - name: Terraform Validate (${{ matrix.cloud }})
         working-directory: terraform/${{ matrix.cloud }}
         run: |
@@ -78,12 +72,12 @@ jobs:
     name: Checkov IaC Scan
     runs-on: ubuntu-latest
     needs: terraform-lint  # Only run after lint passes
+    if: always()
     # Not blocking on lint failure so scans still run on PRs
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
+      
       - name: Run Checkov - AWS
         uses: bridgecrewio/checkov-action@d2fded85b7a55e3c51e2e3e0b5fe55e6f7a7ed1
         # Pinned to a specific commit SHA - not @master
@@ -92,25 +86,7 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,checkov-aws.sarif
           soft_fail: true  # Don't block pipeline - upload findings as annotations
-
-      - name: Run Checkov - Azure
-        uses: bridgecrewio/checkov-action@d2fded85b7a55e3c51e2e3e0b5fe55e6f7a7ed1
-        with:
-          directory: terraform/azure
-          output_format: cli,sarif
-          output_file_path: console,checkov-azure.sarif
-          soft_fail: true
-        if: always()  # Run even if AWS scan found issues
-
-      - name: Run Checkov - GCP
-        uses: bridgecrewio/checkov-action@d2fded85b7a55e3c51e2e3e0b5fe55e6f7a7ed1
-        with:
-          directory: terraform/gcp
-          output_format: cli,sarif
-          output_file_path: console,checkov-gcp.sarif
-          soft_fail: true
-        if: always()
-
+      
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
@@ -120,39 +96,25 @@ jobs:
           category: checkov-aws
         if: always()
 
-      - name: Upload Checkov Azure results to GitHub Security
-        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
-        with:
-          sarif_file: checkov-azure.sarif
-          category: checkov-azure
-        if: always()
-
-      - name: Upload Checkov GCP results to GitHub Security
-        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
-        with:
-          sarif_file: checkov-gcp.sarif
-          category: checkov-gcp
-        if: always()
-
   tfsec-scan:
     name: TFSec IaC Scan
     runs-on: ubuntu-latest
     needs: terraform-lint
-
+    if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
+      
       - name: Run TFSec
         # TFSec gives CRITICAL/HIGH/MEDIUM/LOW severity - better signal than Checkov alone
         uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6
         # Pinned to v1.0.3
         with:
-          working_directory: terraform/
+          working_directory: terraform/aws
           format: sarif
           sarif_file: tfsec.sarif
           soft_fail: true  # Don't fail build - surface as annotations
-
+      
       - name: Upload TFSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
         with:
@@ -170,7 +132,6 @@ jobs:
     name: GitLeaks Secret Scan
     runs-on: ubuntu-latest
     # Run in parallel with IaC scans - secrets are independent of lint
-
     steps:
       - name: Checkout repository
         # fetch-depth: 0 fetches FULL git history
@@ -178,7 +139,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
-
+      
       - name: Run GitLeaks - Scan full git history
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         # Pinned to v2.3.9
@@ -202,7 +163,6 @@ jobs:
     needs: [checkov-scan, tfsec-scan, secret-scan]
     if: github.event_name == 'pull_request' && always()
     # always() ensures this runs even if previous jobs had failures
-
     steps:
       - name: Post scan summary comment
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
@@ -215,20 +175,15 @@ jobs:
               tfsec: '${{ needs.tfsec-scan.result }}',
               secrets: '${{ needs.secret-scan.result }}'
             };
-
             const statusEmoji = (r) => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '⚠️';
-
             const body = `## DevSecOps Pipeline Results
-
             | Scan | Status | Details |
             |------|--------|---------|
             | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Check Security tab for findings |
             | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Check Security tab for findings |
             | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Failed = secrets found in history |
-
             > Scan findings are uploaded to the **Security** tab → **Code Scanning** of this repository.
             > All SARIF results are available there with file/line references.`;
-
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
