@@ -83,15 +83,16 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       
       - name: Run Checkov - AWS
-        uses: bridgecrewio/checkov-action@8c07e78c64ddc2209d8c193a4e321aad67677f8d
-        # Pinned to a specific commit SHA - not @master
-        with:
-          directory: terraform/aws
-          output_format: cli,sarif
-          output_file_path: console,checkov-aws.sarif
-          soft_fail: true
-          hard_fail_on: HIGH,CRITICAL
-          soft_fail_on: MEDIUM,LOW
+        run: |
+          docker run --rm \
+            -v "$PWD":/tf \
+            -w /tf \
+            bridgecrew/checkov:2.0.545 \
+            -d terraform/aws \
+            -o sarif \
+            --soft-fail-on MEDIUM,LOW \
+            --hard-fail-on HIGH,CRITICAL \
+            > checkov-aws.sarif
       
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
