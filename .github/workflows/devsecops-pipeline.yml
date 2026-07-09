@@ -103,6 +103,14 @@ jobs:
           category: checkov-aws
         if: always() && hashFiles('checkov-aws.sarif') != ''
 
+      - name: Upload Checkov artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-aws-sarif
+          path: checkov-aws.sarif
+          if-no-files-found: ignore
+        if: always()
+
   tfsec-scan:
     name: TFSec IaC Scan
     runs-on: ubuntu-latest
@@ -130,6 +138,14 @@ jobs:
           category: tfsec
         if: always() && hashFiles('tfsec.sarif') != ''
 
+      - name: Upload TFSec artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfsec-sarif
+          path: tfsec.sarif
+          if-no-files-found: ignore
+        if: always()
+
   # ─────────────────────────────────────────────
   # STAGE 3: SECRET SCANNING
   # Scan both current code AND git history for leaked credentials
@@ -156,10 +172,25 @@ jobs:
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           # Uncomment above if using GitLeaks Pro (required for org-level scanning)
         with:
-          args: --verbose
+          args: --verbose --report-format sarif --report-path gitleaks.sarif
         # Note: This will FAIL if secrets are found in git history
         # That is intentional - a leaked secret requires immediate rotation,
         # not just removing it from the latest commit
+
+      - name: Upload GitLeaks results to GitHub Security
+        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+        if: always() && hashFiles('gitleaks.sarif') != ''
+
+      - name: Upload GitLeaks artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-sarif
+          path: gitleaks.sarif
+          if-no-files-found: ignore
+        if: always()
 
   # ─────────────────────────────────────────────
   # STAGE 4: SUMMARY REPORT
