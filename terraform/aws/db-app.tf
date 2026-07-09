@@ -1,6 +1,6 @@
 resource "aws_db_instance" "default" {
 
-  name                   = var.dbname
+  db_name                = var.dbname
   engine                 = "mysql"
   option_group_name      = aws_db_option_group.default.name
   parameter_group_name   = aws_db_parameter_group.default.name
@@ -263,7 +263,7 @@ cat << EnD > /tmp/dbinfo.inc
 define('DB_SERVER', '${aws_db_instance.default.endpoint}');
 define('DB_USERNAME', '${aws_db_instance.default.username}');
 define('DB_PASSWORD', '${var.password}');
-define('DB_DATABASE', '${aws_db_instance.default.name}');
+define('DB_DATABASE', '${aws_db_instance.default.db_name}');
 ?>
 EnD
 sudo mv /tmp/dbinfo.inc /var/www/inc 
