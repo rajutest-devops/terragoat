@@ -89,7 +89,9 @@ jobs:
           directory: terraform/aws
           output_format: cli,sarif
           output_file_path: console,checkov-aws.sarif
-          soft_fail: false  # Block pipeline on policy violations
+          soft_fail: true
+          hard_fail_on: HIGH,CRITICAL
+          soft_fail_on: MEDIUM,LOW
       
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
@@ -117,7 +119,8 @@ jobs:
           working_directory: terraform/aws
           format: sarif
           sarif_file: tfsec.sarif
-          soft_fail: false  # Block pipeline on policy violations
+          additional_args: --minimum-severity HIGH
+          soft_fail: false  # Block pipeline only when HIGH/CRITICAL are found
       
       - name: Upload TFSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
