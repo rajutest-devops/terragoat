@@ -173,28 +173,61 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       
       - name: Run TFSec
-        # TFSec gives CRITICAL/HIGH/MEDIUM/LOW severity - better signal than Checkov alone
-        uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6
-        # Pinned to v1.0.3
-        with:
-          working_directory: terraform/aws
-          format: sarif
-          sarif_file: tfsec.sarif
-          additional_args: --minimum-severity HIGH
-          soft_fail: false  # Block pipeline only when HIGH/CRITICAL are found
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 1) SARIF for GitHub Security tab
+          docker run --rm \
+            -v "$PWD":/src \
+            -w /src \
+            aquasec/tfsec:v1.28.5 \
+            --format sarif \
+            --out tfsec.sarif \
+            terraform/aws || true
+
+          # 2) JSON for deterministic gating and PR summary
+          docker run --rm \
+            -v "$PWD":/src \
+            -w /src \
+            aquasec/tfsec:v1.28.5 \
+            --format json \
+            --out tfsec.json \
+            terraform/aws || true
+
+          TFSEC_HC_COUNT=$(jq -r '[.results[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL")] | length' tfsec.json 2>/dev/null || echo 0)
+          echo "TFSec HIGH/CRITICAL findings: ${TFSEC_HC_COUNT}"
+
+          if [[ "$TFSEC_HC_COUNT" =~ ^[0-9]+$ ]] && [[ "$TFSEC_HC_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: TFSec found ${TFSEC_HC_COUNT} HIGH/CRITICAL findings."
+            exit 1
+          fi
+
+      - name: Validate TFSec SARIF JSON
+        id: tfsec_sarif
+        shell: bash
+        run: |
+          if [[ -f tfsec.sarif ]] && jq -e . tfsec.sarif >/dev/null 2>&1; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "TFSec SARIF is not valid JSON; skipping SARIF upload."
+          fi
       
       - name: Upload TFSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
         with:
           sarif_file: tfsec.sarif
           category: tfsec
-        if: always() && hashFiles('tfsec.sarif') != ''
+        if: always() && hashFiles('tfsec.sarif') != '' && steps.tfsec_sarif.outputs.valid == 'true'
 
       - name: Upload TFSec artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfsec-sarif
-          path: tfsec.sarif
+          path: |
+            tfsec.sarif
+            tfsec.json
           if-no-files-found: ignore
         if: always()
 
@@ -217,24 +250,44 @@ jobs:
           fetch-depth: 0
       
       - name: Run GitLeaks - Scan full git history
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
-        # Pinned to v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-          # Uncomment above if using GitLeaks Pro (required for org-level scanning)
-        with:
-          args: --verbose --report-format sarif --report-path gitleaks.sarif
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD":/repo \
+            -w /repo \
+            zricethezav/gitleaks:latest \
+            detect --source=. --report-format sarif --report-path gitleaks.sarif --verbose || true
+
+          GITLEAKS_COUNT=$(jq -r '[.runs[].results[]?] | length' gitleaks.sarif 2>/dev/null || echo 0)
+          echo "GitLeaks findings: ${GITLEAKS_COUNT}"
+
+          if [[ "$GITLEAKS_COUNT" =~ ^[0-9]+$ ]] && [[ "$GITLEAKS_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: GitLeaks found ${GITLEAKS_COUNT} leaked secrets."
+            exit 1
+          fi
         # Note: This will FAIL if secrets are found in git history
         # That is intentional - a leaked secret requires immediate rotation,
         # not just removing it from the latest commit
+
+      - name: Validate GitLeaks SARIF JSON
+        id: gitleaks_sarif
+        shell: bash
+        run: |
+          if [[ -f gitleaks.sarif ]] && jq -e . gitleaks.sarif >/dev/null 2>&1; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "GitLeaks SARIF is not valid JSON; skipping SARIF upload."
+          fi
 
       - name: Upload GitLeaks results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
-        if: always() && hashFiles('gitleaks.sarif') != ''
+        if: always() && hashFiles('gitleaks.sarif') != '' && steps.gitleaks_sarif.outputs.valid == 'true'
 
       - name: Upload GitLeaks artifact
         uses: actions/upload-artifact@v4
