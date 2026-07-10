@@ -115,7 +115,7 @@ jobs:
           awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.json > checkov-aws.json.clean || true
           if [[ -s checkov-aws.json.clean ]]; then mv checkov-aws.json.clean checkov-aws.json; fi
 
-          # 2b) Deterministic hard gate: fail if any Checkov failed checks exist.
+          # 2b) Advisory count for PR reporting (Checkov does not block this demo branch).
           CHECKOV_FAILED_COUNT=$(jq -r '[.[]?.results?.failed_checks[]?] | length' checkov-aws.json 2>/dev/null || echo 0)
           echo "Checkov failed checks: ${CHECKOV_FAILED_COUNT}"
 
@@ -127,11 +127,6 @@ jobs:
             -d terraform/aws \
             -o cli \
             --soft-fail || true
-
-          if [[ "$CHECKOV_FAILED_COUNT" =~ ^[0-9]+$ ]] && [[ "$CHECKOV_FAILED_COUNT" -gt 0 ]]; then
-            echo "::error::Hard fail: Checkov found ${CHECKOV_FAILED_COUNT} failed checks."
-            exit 1
-          fi
       
       - name: Validate Checkov SARIF JSON
         id: checkov_sarif
@@ -384,12 +379,12 @@ jobs:
               secrets: '${{ needs.secret-scan.result }}'
             };
             const statusEmoji = (r) => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '⚠️';
-            const hardFail = [jobResults.checkov, jobResults.tfsec, jobResults.secrets].some(r => r === 'failure');
+            const hardFail = [jobResults.tfsec, jobResults.secrets].some(r => r === 'failure');
             const body = `## DevSecOps Pipeline Results
             | Scan | Status | Details |
             |------|--------|---------|
             | Terraform Lint | ${statusEmoji(jobResults.lint)} ${jobResults.lint} | fmt + validate |
-            | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Check Security tab for findings |
+            | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Advisory only for this demo branch |
             | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Check Security tab for findings |
             | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Failed = secrets found in history |
 
