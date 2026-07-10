@@ -177,25 +177,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 1) SARIF for GitHub Security tab
+          # Generate deterministic output files: tfsec-results.json and tfsec-results.sarif
           docker run --rm \
             -v "$PWD":/src \
             -w /src \
             aquasec/tfsec:v1.28.5 \
-            --format sarif \
-            --out tfsec.sarif \
+            --format json,sarif \
+            --out tfsec-results \
             terraform/aws || true
 
-          # 2) JSON for deterministic gating and PR summary
-          docker run --rm \
-            -v "$PWD":/src \
-            -w /src \
-            aquasec/tfsec:v1.28.5 \
-            --format json \
-            --out tfsec.json \
-            terraform/aws || true
+          if [[ ! -f tfsec-results.json ]]; then
+            echo "::error::TFSec JSON report tfsec-results.json was not generated."
+            exit 1
+          fi
 
-          TFSEC_HC_COUNT=$(jq -r '[.results[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL")] | length' tfsec.json 2>/dev/null || echo 0)
+          if [[ ! -f tfsec-results.sarif ]]; then
+            echo "::warning::TFSec SARIF report tfsec-results.sarif was not generated."
+          fi
+
+          TFSEC_HC_COUNT=$(jq -r '[.results[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL")] | length' tfsec-results.json 2>/dev/null || echo "parse_error")
+          if [[ "$TFSEC_HC_COUNT" == "parse_error" ]]; then
+            echo "::error::Unable to parse tfsec-results.json"
+            exit 1
+          fi
+
           echo "TFSec HIGH/CRITICAL findings: ${TFSEC_HC_COUNT}"
 
           if [[ "$TFSEC_HC_COUNT" =~ ^[0-9]+$ ]] && [[ "$TFSEC_HC_COUNT" -gt 0 ]]; then
@@ -207,7 +212,7 @@ jobs:
         id: tfsec_sarif
         shell: bash
         run: |
-          if [[ -f tfsec.sarif ]] && jq -e . tfsec.sarif >/dev/null 2>&1; then
+          if [[ -f tfsec-results.sarif ]] && jq -e . tfsec-results.sarif >/dev/null 2>&1; then
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
             echo "valid=false" >> "$GITHUB_OUTPUT"
@@ -217,17 +222,17 @@ jobs:
       - name: Upload TFSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
         with:
-          sarif_file: tfsec.sarif
+          sarif_file: tfsec-results.sarif
           category: tfsec
-        if: always() && hashFiles('tfsec.sarif') != '' && steps.tfsec_sarif.outputs.valid == 'true'
+        if: always() && hashFiles('tfsec-results.sarif') != '' && steps.tfsec_sarif.outputs.valid == 'true'
 
       - name: Upload TFSec artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfsec-sarif
           path: |
-            tfsec.sarif
-            tfsec.json
+            tfsec-results.sarif
+            tfsec-results.json
           if-no-files-found: ignore
         if: always()
 
@@ -340,9 +345,13 @@ jobs:
             [[ -z "$CHECKOV_TOP" || "$CHECKOV_TOP" == "null" ]] && CHECKOV_TOP="No failed checks captured"
           fi
 
-          if [[ -f scan-artifacts/tfsec.sarif ]]; then
-            TFSEC_COUNT=$(jq -r '[.runs[].results[]?] | length' scan-artifacts/tfsec.sarif 2>/dev/null || echo "N/A")
-            TFSEC_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/tfsec.sarif 2>/dev/null || echo "N/A")
+          if [[ -f scan-artifacts/tfsec-results.json ]]; then
+            TFSEC_COUNT=$(jq -r '[.results[]?] | length' scan-artifacts/tfsec-results.json 2>/dev/null || echo "N/A")
+            TFSEC_TOP=$(jq -r '[.results[]?.rule_id] | unique | .[:5] | join(", ")' scan-artifacts/tfsec-results.json 2>/dev/null || echo "N/A")
+            [[ -z "$TFSEC_TOP" || "$TFSEC_TOP" == "null" ]] && TFSEC_TOP="No failed checks captured"
+          elif [[ -f scan-artifacts/tfsec-results.sarif ]]; then
+            TFSEC_COUNT=$(jq -r '[.runs[].results[]?] | length' scan-artifacts/tfsec-results.sarif 2>/dev/null || echo "N/A")
+            TFSEC_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/tfsec-results.sarif 2>/dev/null || echo "N/A")
             [[ -z "$TFSEC_TOP" || "$TFSEC_TOP" == "null" ]] && TFSEC_TOP="No failed checks captured"
           fi
 
