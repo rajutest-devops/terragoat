@@ -1,0 +1,93 @@
+name: CD Approval Gate Demo
+
+on:
+  push:
+    branches: [demo-main]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Target environment label for approval gate"
+        required: true
+        default: "demo"
+        type: choice
+        options:
+          - demo
+          - staging
+          - production
+      notes:
+        description: "Optional release notes shown in logs"
+        required: false
+        default: "Demo run - no infrastructure changes"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-demo-${{ github.ref }}-${{ github.event.inputs.target_environment || 'demo' }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare Deployment Context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build release manifest
+        run: |
+          set -euo pipefail
+          {
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "commit=${GITHUB_SHA}"
+            echo "environment=${{ github.event.inputs.target_environment || 'demo' }}"
+            echo "notes=${{ github.event.inputs.notes || 'Auto run from push to demo-main' }}"
+            echo "terraform_dir=terraform/aws"
+          } > release-manifest.txt
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: release-manifest.txt
+
+  approval:
+    name: Manual Approval Gate
+    runs-on: ubuntu-latest
+    needs: prepare
+    environment:
+      name: cd-${{ github.event.inputs.target_environment || 'demo' }}
+    steps:
+      - name: Approval acknowledged
+        run: |
+          echo "Manual approval completed for environment: ${{ github.event.inputs.target_environment || 'demo' }}"
+          echo "No infrastructure changes executed in this workflow."
+
+  deploy-preview:
+    name: Post-Approval Deploy Preview
+    runs-on: ubuntu-latest
+    needs: approval
+    steps:
+      - name: Show deployment commands (preview only)
+        run: |
+          cat <<'EOF'
+          Approval gate passed. In a real CD run, this stage would execute:
+
+          terraform -chdir=terraform/aws init
+          terraform -chdir=terraform/aws plan -out=tfplan
+          terraform -chdir=terraform/aws apply tfplan
+
+          For cost safety, this demo workflow does NOT run apply.
+          EOF
+
+      - name: Show rollback/destroy commands (preview only)
+        run: |
+          cat <<'EOF'
+          Cleanup commands for ephemeral demo environments:
+
+          terraform -chdir=terraform/aws destroy -auto-approve
+
+          Keep this manual and approved to avoid accidental deletion.
+          EOF
