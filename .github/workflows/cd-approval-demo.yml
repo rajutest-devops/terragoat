@@ -14,11 +14,6 @@ on:
           - demo
           - staging
           - production
-      notes:
-        description: "Optional release notes shown in logs"
-        required: false
-        default: "Demo run - no infrastructure changes"
-        type: string
 
 permissions:
   contents: read
@@ -28,42 +23,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare:
-    name: Prepare Deployment Context
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
-      - name: Build release manifest
-        run: |
-          set -euo pipefail
-          {
-            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "branch=${GITHUB_REF_NAME}"
-            echo "commit=${GITHUB_SHA}"
-            echo "environment=${{ github.event.inputs.target_environment || 'demo' }}"
-            echo "notes=${{ github.event.inputs.notes || 'Auto run from push to demo-main' }}"
-            echo "terraform_dir=terraform/aws"
-          } > release-manifest.txt
-
-      - name: Upload release manifest
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-manifest
-          path: release-manifest.txt
-
   approval:
     name: Manual Approval Gate
     runs-on: ubuntu-latest
-    needs: prepare
     environment:
       name: cd-${{ github.event.inputs.target_environment || 'demo' }}
     steps:
       - name: Approval acknowledged
         run: |
           echo "Manual approval completed for environment: ${{ github.event.inputs.target_environment || 'demo' }}"
-          echo "No infrastructure changes executed in this workflow."
+          echo "Terraform apply stage is now unlocked."
 
   deploy-apply:
     name: Post-Approval Terraform Apply
@@ -108,6 +77,3 @@ jobs:
         run: |
           echo "Terraform apply completed after manual environment approval gate."
           echo "Run destroy manually after demo to avoid ongoing AWS charges."
-
-          Keep this manual and approved to avoid accidental deletion.
-          EOF
