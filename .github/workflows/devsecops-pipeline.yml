@@ -231,6 +231,12 @@ jobs:
     if: github.event_name == 'pull_request' && always()
     # always() ensures this runs even if previous jobs had failures
     steps:
+      - name: Ensure jq is available
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+
       - name: Download scan artifacts
         uses: actions/download-artifact@v4
         with:
@@ -277,6 +283,7 @@ jobs:
             echo "gitleaks_count=$GITLEAKS_COUNT"
             echo "gitleaks_top=$GITLEAKS_TOP"
           } >> "$GITHUB_OUTPUT"
+        continue-on-error: true
 
       - name: Post scan summary comment
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
