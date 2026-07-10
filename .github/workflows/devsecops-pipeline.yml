@@ -67,7 +67,7 @@ jobs:
         # -backend=false skips state backend init (we don't have credentials here)
         # This still validates resource types, argument names, and value types
 
-  # ─────────────────────────────────────────────
+  # #─────────────────────────────────────────────
   # STAGE 2: IAC SECURITY SCANNING
   # Run Checkov + TFSec on all Terraform directories
   # Both tools run even if one fails (fail-fast: false)
@@ -84,15 +84,36 @@ jobs:
       
       - name: Run Checkov - AWS
         run: |
+          set -euo pipefail
+
+          # 1) SARIF for GitHub Code Scanning (preserve exit code for gating)
           docker run --rm \
             -v "$PWD":/tf \
             -w /tf \
             bridgecrew/checkov:2.0.545 \
             -d terraform/aws \
             -o sarif \
-            --soft-fail-on MEDIUM,LOW \
             --hard-fail-on HIGH,CRITICAL \
             > checkov-aws.sarif
+
+          # 2) JSON artifact for offline evidence and post-analysis
+          docker run --rm \
+            -v "$PWD":/tf \
+            -w /tf \
+            bridgecrew/checkov:2.0.545 \
+            -d terraform/aws \
+            -o json \
+            --hard-fail-on HIGH,CRITICAL \
+            > checkov-aws.json || true
+
+          # 3) CLI output so failing checks are visible directly in workflow logs
+          docker run --rm \
+            -v "$PWD":/tf \
+            -w /tf \
+            bridgecrew/checkov:2.0.545 \
+            -d terraform/aws \
+            -o cli \
+            --hard-fail-on HIGH,CRITICAL || true
       
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
@@ -107,7 +128,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: checkov-aws-sarif
-          path: checkov-aws.sarif
+          path: |
+            checkov-aws.sarif
+            checkov-aws.json
           if-no-files-found: ignore
         if: always()
 
