@@ -94,6 +94,7 @@ jobs:
             bridgecrew/checkov:2.0.545 \
             -d terraform/aws \
             -o sarif \
+            --quiet \
             --hard-fail-on HIGH,CRITICAL \
             > checkov-aws.sarif
           CHECKOV_RC=$?
@@ -106,6 +107,7 @@ jobs:
             bridgecrew/checkov:2.0.545 \
             -d terraform/aws \
             -o json \
+            --quiet \
             --hard-fail-on HIGH,CRITICAL \
             > checkov-aws.json || true
 
@@ -120,6 +122,17 @@ jobs:
 
           exit $CHECKOV_RC
       
+      - name: Validate Checkov SARIF JSON
+        id: checkov_sarif
+        shell: bash
+        run: |
+          if [[ -f checkov-aws.sarif ]] && jq -e . checkov-aws.sarif >/dev/null 2>&1; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "Checkov SARIF is not valid JSON; skipping SARIF upload."
+          fi
+
       # Upload SARIF to GitHub Security tab - findings appear as Code Scanning alerts
       - name: Upload Checkov AWS results to GitHub Security
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f
@@ -127,7 +140,7 @@ jobs:
         with:
           sarif_file: checkov-aws.sarif
           category: checkov-aws
-        if: always() && hashFiles('checkov-aws.sarif') != ''
+        if: always() && hashFiles('checkov-aws.sarif') != '' && steps.checkov_sarif.outputs.valid == 'true'
 
       - name: Upload Checkov artifact
         uses: actions/upload-artifact@v4
@@ -259,19 +272,19 @@ jobs:
 
           if [[ -f scan-artifacts/checkov-aws.json ]]; then
             CHECKOV_COUNT=$(jq -r '.failed_checks | length' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
-            CHECKOV_TOP=$(jq -r '.failed_checks[:5] | map(.check_id + "(" + (.check_result.severity // "UNKNOWN") + ")") | join(", ")' scan-artifacts/checkov-aws.json 2>/dev/null)
+            CHECKOV_TOP=$(jq -r '.failed_checks[:5] | map(.check_id + "(" + (.check_result.severity // "UNKNOWN") + ")") | join(", ")' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
             [[ -z "$CHECKOV_TOP" || "$CHECKOV_TOP" == "null" ]] && CHECKOV_TOP="No failed checks captured"
           fi
 
           if [[ -f scan-artifacts/tfsec.sarif ]]; then
             TFSEC_COUNT=$(jq -r '[.runs[].results[]?] | length' scan-artifacts/tfsec.sarif 2>/dev/null || echo "N/A")
-            TFSEC_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/tfsec.sarif 2>/dev/null)
+            TFSEC_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/tfsec.sarif 2>/dev/null || echo "N/A")
             [[ -z "$TFSEC_TOP" || "$TFSEC_TOP" == "null" ]] && TFSEC_TOP="No failed checks captured"
           fi
 
           if [[ -f scan-artifacts/gitleaks.sarif ]]; then
             GITLEAKS_COUNT=$(jq -r '[.runs[].results[]?] | length' scan-artifacts/gitleaks.sarif 2>/dev/null || echo "N/A")
-            GITLEAKS_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/gitleaks.sarif 2>/dev/null)
+            GITLEAKS_TOP=$(jq -r '[.runs[].results[]?.ruleId] | unique | .[:5] | join(", ")' scan-artifacts/gitleaks.sarif 2>/dev/null || echo "N/A")
             [[ -z "$GITLEAKS_TOP" || "$GITLEAKS_TOP" == "null" ]] && GITLEAKS_TOP="No failed secrets captured"
           fi
 
