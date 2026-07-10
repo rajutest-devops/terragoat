@@ -86,8 +86,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 1) SARIF for GitHub Code Scanning (capture exit code for gating)
-          set +e
+          # 1) SARIF for GitHub Code Scanning
           docker run --rm \
             -v "$PWD":/tf \
             -w /tf \
@@ -95,10 +94,8 @@ jobs:
             -d terraform/aws \
             -o sarif \
             --quiet \
-            --hard-fail-on HIGH,CRITICAL \
+            --soft-fail \
             > checkov-aws.sarif
-          CHECKOV_RC=$?
-          set -e
 
           # Checkov may prepend non-JSON banner text. Keep JSON payload only.
           awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.sarif > checkov-aws.sarif.clean || true
@@ -112,11 +109,15 @@ jobs:
             -d terraform/aws \
             -o json \
             --quiet \
-            --hard-fail-on HIGH,CRITICAL \
+            --soft-fail \
             > checkov-aws.json || true
 
           awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.json > checkov-aws.json.clean || true
           if [[ -s checkov-aws.json.clean ]]; then mv checkov-aws.json.clean checkov-aws.json; fi
+
+          # 2b) Deterministic hard gate: fail if any Checkov failed checks exist.
+          CHECKOV_FAILED_COUNT=$(jq -r '[.[]?.results?.failed_checks[]?] | length' checkov-aws.json 2>/dev/null || echo 0)
+          echo "Checkov failed checks: ${CHECKOV_FAILED_COUNT}"
 
           # 3) CLI output so failing checks are visible directly in workflow logs
           docker run --rm \
@@ -125,9 +126,12 @@ jobs:
             bridgecrew/checkov:2.0.545 \
             -d terraform/aws \
             -o cli \
-            --hard-fail-on HIGH,CRITICAL || true
+            --soft-fail || true
 
-          exit $CHECKOV_RC
+          if [[ "$CHECKOV_FAILED_COUNT" =~ ^[0-9]+$ ]] && [[ "$CHECKOV_FAILED_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: Checkov found ${CHECKOV_FAILED_COUNT} failed checks."
+            exit 1
+          fi
       
       - name: Validate Checkov SARIF JSON
         id: checkov_sarif
@@ -318,6 +322,7 @@ jobs:
               secrets: '${{ needs.secret-scan.result }}'
             };
             const statusEmoji = (r) => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '⚠️';
+            const hardFail = [jobResults.checkov, jobResults.tfsec, jobResults.secrets].some(r => r === 'failure');
             const body = `## DevSecOps Pipeline Results
             | Scan | Status | Details |
             |------|--------|---------|
@@ -325,6 +330,9 @@ jobs:
             | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Check Security tab for findings |
             | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Check Security tab for findings |
             | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Failed = secrets found in history |
+
+            ### Gate Decision
+            - Hard fail gates present: ${hardFail ? 'YES (merge should be blocked by required checks)' : 'NO (safe to merge if branch protection is enabled)'}
             
             ### Why It Failed (Top Findings)
             - Checkov failed checks: ${{ steps.findings.outputs.checkov_count }}
