@@ -115,9 +115,33 @@ jobs:
           awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.json > checkov-aws.json.clean || true
           if [[ -s checkov-aws.json.clean ]]; then mv checkov-aws.json.clean checkov-aws.json; fi
 
-          # 2b) Advisory count for PR reporting (Checkov does not block this demo branch).
+          # 2b) Deterministic hard-fail on selected high-risk Checkov checks.
           CHECKOV_FAILED_COUNT=$(jq -r '[.[]?.results?.failed_checks[]?] | length' checkov-aws.json 2>/dev/null || echo 0)
           echo "Checkov failed checks: ${CHECKOV_FAILED_COUNT}"
+
+          CHECKOV_HARD_COUNT=$(jq -r '[.[]?.results?.failed_checks[]? | .check_id | select(
+            . == "CKV_AWS_16" or
+            . == "CKV_AWS_17" or
+            . == "CKV_AWS_24" or
+            . == "CKV_AWS_38" or
+            . == "CKV_AWS_39" or
+            . == "CKV_AWS_46" or
+            . == "CKV_AWS_51" or
+            . == "CKV_AWS_58" or
+            . == "CKV_AWS_79" or
+            . == "CKV_AWS_92" or
+            . == "CKV_AWS_118" or
+            . == "CKV_AWS_127" or
+            . == "CKV_AWS_129" or
+            . == "CKV_AWS_136" or
+            . == "CKV_AWS_157" or
+            . == "CKV_AWS_161" or
+            . == "CKV_AWS_163" or
+            . == "CKV2_AWS_2" or
+            . == "CKV2_AWS_6" or
+            . == "CKV2_AWS_11"
+          )] | length' checkov-aws.json 2>/dev/null || echo 0)
+          echo "Checkov hard-fail checks: ${CHECKOV_HARD_COUNT}"
 
           # 3) CLI output so failing checks are visible directly in workflow logs
           docker run --rm \
@@ -127,6 +151,11 @@ jobs:
             -d terraform/aws \
             -o cli \
             --soft-fail || true
+
+          if [[ "$CHECKOV_HARD_COUNT" =~ ^[0-9]+$ ]] && [[ "$CHECKOV_HARD_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: Checkov found ${CHECKOV_HARD_COUNT} high-risk failed checks."
+            exit 1
+          fi
       
       - name: Validate Checkov SARIF JSON
         id: checkov_sarif
@@ -172,19 +201,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Generate JSON report for PR summary
+          # Generate JSON report for PR summary.
           docker run --rm \
             -v "$PWD":/src \
             -w /src \
             aquasec/tfsec:v1.28.5 \
             --format json \
-            --out tfsec-results \
-            terraform/aws || true
-
-          # tfsec may write exactly the out value without extension.
-          if [[ -f tfsec-results ]]; then
-            mv tfsec-results tfsec-results.json
-          fi
+            terraform/aws > tfsec-results.json || true
 
           # Generate SARIF report for Security tab upload.
           docker run --rm \
@@ -192,29 +215,27 @@ jobs:
             -w /src \
             aquasec/tfsec:v1.28.5 \
             --format sarif \
-            --out tfsec-results.sarif \
-            terraform/aws || true
-
-          if [[ -f tfsec-results.sarif.sarif ]]; then
-            mv tfsec-results.sarif.sarif tfsec-results.sarif
-          fi
+            terraform/aws > tfsec-results.sarif || true
 
           if [[ ! -f tfsec-results.json ]]; then
-            echo "::warning::TFSec JSON report tfsec-results.json was not generated."
+            echo "::error::TFSec JSON report tfsec-results.json was not generated."
+            exit 1
           fi
 
           if [[ ! -f tfsec-results.sarif ]]; then
             echo "::warning::TFSec SARIF report tfsec-results.sarif was not generated."
           fi
 
-          if [[ -f tfsec-results.json ]]; then
-            TFSEC_HC_COUNT=$(jq -r '[.results[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL")] | length' tfsec-results.json 2>/dev/null || echo "parse_error")
-            if [[ "$TFSEC_HC_COUNT" == "parse_error" ]]; then
-              echo "::warning::Unable to parse tfsec-results.json"
-            else
-              echo "TFSec HIGH/CRITICAL findings: ${TFSEC_HC_COUNT}"
-              echo "::notice::TFSec is advisory in this demo branch."
-            fi
+          TFSEC_HC_COUNT=$(jq -r '[.results[]? | select((.severity // "" | ascii_upcase) == "HIGH" or (.severity // "" | ascii_upcase) == "CRITICAL")] | length' tfsec-results.json 2>/dev/null || echo "parse_error")
+          if [[ "$TFSEC_HC_COUNT" == "parse_error" ]]; then
+            echo "::error::Unable to parse tfsec-results.json"
+            exit 1
+          fi
+
+          echo "TFSec HIGH/CRITICAL findings: ${TFSEC_HC_COUNT}"
+          if [[ "$TFSEC_HC_COUNT" =~ ^[0-9]+$ ]] && [[ "$TFSEC_HC_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: TFSec found ${TFSEC_HC_COUNT} HIGH/CRITICAL findings."
+            exit 1
           fi
 
       - name: Validate TFSec SARIF JSON
@@ -247,8 +268,7 @@ jobs:
 
   # ─────────────────────────────────────────────
   # STAGE 3: SECRET SCANNING
-  # Scan both current code AND git history for leaked credentials
-  # Advisory mode for demo branch: findings are reported but do not block merge
+  # Scan current Terraform scope for leaked credentials
   # ─────────────────────────────────────────────
   secret-scan:
     name: GitLeaks Secret Scan
@@ -271,11 +291,15 @@ jobs:
             -v "$PWD":/repo \
             -w /repo \
             zricethezav/gitleaks:latest \
-            detect --source=. --report-format sarif --report-path gitleaks.sarif --verbose || true
+            detect --source=terraform/aws --report-format sarif --report-path gitleaks.sarif --verbose || true
 
           GITLEAKS_COUNT=$(jq -r '[.runs[].results[]?] | length' gitleaks.sarif 2>/dev/null || echo 0)
           echo "GitLeaks findings: ${GITLEAKS_COUNT}"
-          echo "::notice::GitLeaks is advisory in this demo branch."
+
+          if [[ "$GITLEAKS_COUNT" =~ ^[0-9]+$ ]] && [[ "$GITLEAKS_COUNT" -gt 0 ]]; then
+            echo "::error::Hard fail: GitLeaks found ${GITLEAKS_COUNT} leaked secrets in terraform/aws."
+            exit 1
+          fi
 
       - name: Validate GitLeaks SARIF JSON
         id: gitleaks_sarif
@@ -385,14 +409,14 @@ jobs:
               secrets: '${{ needs.secret-scan.result }}'
             };
             const statusEmoji = (r) => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '⚠️';
-            const hardFail = false;
+            const hardFail = [jobResults.checkov, jobResults.tfsec, jobResults.secrets].some(r => r === 'failure');
             const body = `## DevSecOps Pipeline Results
             | Scan | Status | Details |
             |------|--------|---------|
             | Terraform Lint | ${statusEmoji(jobResults.lint)} ${jobResults.lint} | fmt + validate |
-            | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Advisory only for this demo branch |
-            | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Advisory only for this demo branch |
-            | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Advisory only for this demo branch |
+            | Checkov IaC Scan | ${statusEmoji(jobResults.checkov)} ${jobResults.checkov} | Hard-fail on high-risk checks |
+            | TFSec IaC Scan | ${statusEmoji(jobResults.tfsec)} ${jobResults.tfsec} | Hard-fail on HIGH/CRITICAL |
+            | GitLeaks Secret Scan | ${statusEmoji(jobResults.secrets)} ${jobResults.secrets} | Hard-fail when secrets found in terraform/aws |
 
             ### Gate Decision
             - Hard fail gates present: ${hardFail ? 'YES (merge should be blocked by required checks)' : 'NO (safe to merge if branch protection is enabled)'}
