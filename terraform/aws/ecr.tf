@@ -1,15 +1,6 @@
-resource "aws_ecr_repository" "repository" {
+resource aws_ecr_repository "repository" {
   name                 = "${local.resource_prefix.value}-repository"
-  image_tag_mutability = "IMMUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "KMS"
-    kms_key         = aws_kms_key.security_key.arn
-  }
+  image_tag_mutability = "MUTABLE"
 
 
   tags = merge({
@@ -31,7 +22,7 @@ locals {
 }
 
 
-resource "null_resource" "push_image" {
+resource null_resource "push_image" {
   provisioner "local-exec" {
     working_dir = "${path.module}/resources"
     command     = <<BASH

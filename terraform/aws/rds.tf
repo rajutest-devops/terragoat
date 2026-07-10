@@ -1,18 +1,8 @@
 resource "aws_rds_cluster" "app1-rds-cluster" {
-  cluster_identifier                  = "app1-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 7
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app1-rds-cluster-final"
+  cluster_identifier      = "app1-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 0
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -25,20 +15,10 @@ resource "aws_rds_cluster" "app1-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app2-rds-cluster" {
-  cluster_identifier                  = "app2-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 7
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app2-rds-cluster-final"
+  cluster_identifier      = "app2-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 1
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -51,20 +31,10 @@ resource "aws_rds_cluster" "app2-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app3-rds-cluster" {
-  cluster_identifier                  = "app3-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 15
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app3-rds-cluster-final"
+  cluster_identifier      = "app3-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 15
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -77,20 +47,10 @@ resource "aws_rds_cluster" "app3-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app4-rds-cluster" {
-  cluster_identifier                  = "app4-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 15
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app4-rds-cluster-final"
+  cluster_identifier      = "app4-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 15
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -103,20 +63,10 @@ resource "aws_rds_cluster" "app4-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app5-rds-cluster" {
-  cluster_identifier                  = "app5-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 15
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app5-rds-cluster-final"
+  cluster_identifier      = "app5-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 15
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -129,20 +79,10 @@ resource "aws_rds_cluster" "app5-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app6-rds-cluster" {
-  cluster_identifier                  = "app6-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 15
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app6-rds-cluster-final"
+  cluster_identifier      = "app6-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 15
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -155,20 +95,10 @@ resource "aws_rds_cluster" "app6-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app7-rds-cluster" {
-  cluster_identifier                  = "app7-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 25
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app7-rds-cluster-final"
+  cluster_identifier      = "app7-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 25
   tags = {
-    Backup               = "true"
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
     git_last_modified_at = "2021-12-08 23:26:32"
@@ -181,18 +111,9 @@ resource "aws_rds_cluster" "app7-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app8-rds-cluster" {
-  cluster_identifier                  = "app8-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 25
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app8-rds-cluster-final"
+  cluster_identifier      = "app8-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 25
   tags = {
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
@@ -207,18 +128,9 @@ resource "aws_rds_cluster" "app8-rds-cluster" {
 }
 
 resource "aws_rds_cluster" "app9-rds-cluster" {
-  cluster_identifier                  = "app9-rds-cluster"
-  engine                              = "aurora-mysql"
-  allocated_storage                   = 10
-  backup_retention_period             = 25
-  storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.security_key.arn
-  deletion_protection                 = true
-  iam_database_authentication_enabled = true
-  enabled_cloudwatch_logs_exports     = ["audit", "error", "general", "slowquery"]
-  copy_tags_to_snapshot               = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "app9-rds-cluster-final"
+  cluster_identifier      = "app9-rds-cluster"
+  allocated_storage       = 10
+  backup_retention_period = 25
   tags = {
     git_commit           = "079fe74f6b96d887c245664fbd8cf676c92f20e5"
     git_file             = "terraform/aws/rds.tf"
