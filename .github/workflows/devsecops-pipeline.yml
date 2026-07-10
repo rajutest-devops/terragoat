@@ -100,6 +100,10 @@ jobs:
           CHECKOV_RC=$?
           set -e
 
+          # Checkov may prepend non-JSON banner text. Keep JSON payload only.
+          awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.sarif > checkov-aws.sarif.clean || true
+          if [[ -s checkov-aws.sarif.clean ]]; then mv checkov-aws.sarif.clean checkov-aws.sarif; fi
+
           # 2) JSON artifact for offline evidence and post-analysis
           docker run --rm \
             -v "$PWD":/tf \
@@ -110,6 +114,9 @@ jobs:
             --quiet \
             --hard-fail-on HIGH,CRITICAL \
             > checkov-aws.json || true
+
+          awk 'BEGIN{p=0} /^[[:space:]]*[\{\[]/ {p=1} p {print}' checkov-aws.json > checkov-aws.json.clean || true
+          if [[ -s checkov-aws.json.clean ]]; then mv checkov-aws.json.clean checkov-aws.json; fi
 
           # 3) CLI output so failing checks are visible directly in workflow logs
           docker run --rm \
@@ -271,8 +278,8 @@ jobs:
           GITLEAKS_TOP="N/A"
 
           if [[ -f scan-artifacts/checkov-aws.json ]]; then
-            CHECKOV_COUNT=$(jq -r '.failed_checks | length' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
-            CHECKOV_TOP=$(jq -r '.failed_checks[:5] | map(.check_id + "(" + (.check_result.severity // "UNKNOWN") + ")") | join(", ")' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
+            CHECKOV_COUNT=$(jq -r '[.[]?.results?.failed_checks[]?] | length' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
+            CHECKOV_TOP=$(jq -r '[.[]?.results?.failed_checks[]? | .check_id] | unique | .[:5] | join(", ")' scan-artifacts/checkov-aws.json 2>/dev/null || echo "N/A")
             [[ -z "$CHECKOV_TOP" || "$CHECKOV_TOP" == "null" ]] && CHECKOV_TOP="No failed checks captured"
           fi
 
