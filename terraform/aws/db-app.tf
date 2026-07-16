@@ -19,7 +19,7 @@ resource "aws_db_instance" "default" {
   storage_encrypted                   = true
   kms_key_id                          = aws_kms_key.security_key.arn
   skip_final_snapshot                 = false
-  final_snapshot_identifier           = "${local.resource_prefix.value}-final-snapshot"
+  final_snapshot_identifier           = "snapshot-${local.resource_prefix.value}"
   monitoring_interval                 = 60
   publicly_accessible                 = false
   deletion_protection                 = true
