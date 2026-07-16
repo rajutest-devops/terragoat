@@ -15,7 +15,7 @@ resource "aws_db_instance" "default" {
   password                            = var.password
   apply_immediately                   = true
   multi_az                            = true
-  backup_retention_period             = 7
+  backup_retention_period             = 0
   storage_encrypted                   = true
   kms_key_id                          = aws_kms_key.security_key.arn
   skip_final_snapshot                 = false
