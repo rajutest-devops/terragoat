@@ -72,6 +72,7 @@ jobs:
           set -euo pipefail
           terraform -chdir=terraform/aws plan \
             -var="region=us-west-2" \
+            -var="profile=" \
             -out=tfplan
 
       - name: Terraform Apply
