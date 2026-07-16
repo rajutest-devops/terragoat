@@ -58,15 +58,21 @@ jobs:
             exit 1
           fi
 
-      - name: Terraform Init
+      - name: Terraform Init (S3 remote backend)
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/aws init -backend=false
+          terraform -chdir=terraform/aws init \
+            -backend-config="bucket=my-terragoat-tfstate-2026-nttdata" \
+            -backend-config="key=terragoat/aws/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
 
       - name: Terraform Plan
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/aws plan -lock=false -out=tfplan
+          terraform -chdir=terraform/aws plan \
+            -var="region=us-west-2" \
+            -out=tfplan
 
       - name: Terraform Apply
         run: |
